@@ -168,7 +168,7 @@ def is_full_body(image_path, threshold=0.6):
     import mediapipe as mp
     img = cv2.imread(image_path)
     if img is None:
-        return False  # Fotoğraf açılamazsa boydan sayma
+        return False  # Fotoğraf açılamazsa boydan sayma!
 
     mp_pose = mp.solutions.pose
     with mp_pose.Pose(static_image_mode=True) as pose:

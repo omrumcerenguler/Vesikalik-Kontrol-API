@@ -67,11 +67,11 @@ Bu proje, yüklenen bir fotoğrafın vesikalık standartlarına uygun olup olmad
 
 ## 👩‍💻 Geliştirici & Proje Bilgisi
 
-- **Adı:** Ömrüm Ceren Güler
+- **Adı:** Ömrüm Ceren GÜLER
 - **Staj:** Yapay Zeka & Yazılım Geliştirme
 - **Yıl:** 2025
 - **Üniversite:** Çukurova Üniversitesi
-- **Staj Koordinatörü:** Mehmet Harun Gülen
+- **Staj Koordinatörü:** Mehmet Harun GÜLEN
 
 ## Lisans
 
@@ -157,11 +157,11 @@ This project is a FastAPI-based backend service that automatically checks if an 
 
 ## 👩‍💻 Developer & Project Info
 
-- **Name:** Ömrüm Ceren Güler
+- **Name:** Ömrüm Ceren GÜLER
 - **Internship:** AI & Software Development
 - **Year:** 2025
 - **University:** Çukurova University
-- **Internship Coordinator:** Mehmet Harun Gülen
+- **Internship Coordinator:** Mehmet Harun GÜLEN
 
 ## License
 

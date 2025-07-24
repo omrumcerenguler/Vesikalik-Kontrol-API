@@ -68,6 +68,7 @@ Bu proje, yüklenen bir fotoğrafın vesikalık standartlarına uygun olup olmad
 ## 👩‍💻 Geliştirici & Proje Bilgisi
 
 - **Adı:** Ömrüm Ceren GÜLER
+- **İletişim:** omrumguler35@gmail.com
 - **Staj:** Yapay Zeka & Yazılım Geliştirme
 - **Yıl:** 2025
 - **Üniversite:** Çukurova Üniversitesi
@@ -158,6 +159,7 @@ This project is a FastAPI-based backend service that automatically checks if an 
 ## 👩‍💻 Developer & Project Info
 
 - **Name:** Ömrüm Ceren GÜLER
+- **Contact:** omrumguler35@gmail.com
 - **Internship:** AI & Software Development
 - **Year:** 2025
 - **University:** Çukurova University

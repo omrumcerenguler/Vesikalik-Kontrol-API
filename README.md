@@ -1,179 +1,100 @@
-## 📄 Türkçe Version (README)
+# 📸 Vesikalık Fotoğraf Otomatik Kontrol API'si / Passport Photo Auto-Checker API
 
-# Vesikalık Fotoğraf Otomatik Kontrol API'si
+Bu proje, vesikalık fotoğrafların belirli standartlara uygunluğunu kontrol eden FastAPI tabanlı bir web servisidir.  
+This project is a FastAPI-based backend service that checks if a photo meets official ID/passport photo standards.
 
-Bu proje, yüklenen bir fotoğrafın vesikalık standartlarına uygun olup olmadığını otomatik olarak kontrol eden FastAPI tabanlı bir backend servisidir.
+---
 
-## 🚀 Özellikler
+## 🧠 Özellikler / Features
 
-- **Yüz tespiti:** MediaPipe ve OpenCV ile otomatik yüz algılama
-- **Boyut ve oran kontrolü:** En-boy oranı, çözünürlük sınırları
-- **Arka plan, netlik ve renk analizi**
-- **Bulanıklık ve aydınlık/karanlık kontrolü**
-- **EXIF tarih ve rotasyon analizi**
-- **Boydan fotoğraf tespiti**
-- **Gözlük, aksesuar vb. kontrol (isteğe bağlı)**
-- **Çoklu dil desteği (Türkçe/İngilizce)**
-- **Ayrıntılı hata mesajları**
-- **Log ve hata takibi**
-- **Versiyon endpoint'i**  
-- **Rate limit koruması** (sistemi korumak için istek sınırlama)
+- 👤 Yüz tespiti / Face detection (MediaPipe + OpenCV)  
+- 📏 Boyut ve oran kontrolü / Size & ratio control  
+- 🧱 Arka plan, kontrast ve renk analizi / Background, contrast & color analysis  
+- 🔍 Bulanıklık ve ışık analizi / Blur & brightness check  
+- 📆 EXIF tarih/rotasyon kontrolü / EXIF timestamp and rotation check  
+- 🧢 Aksesuar tespiti (opsiyonel) / Accessory detection (optional)  
+- 🌍 Çoklu dil desteği / Multilingual support (TR/EN)  
+- 📝 Detaylı hata mesajları / Detailed error messages  
+- 📊 Loglama ve istatistik desteği / Logging and statistics  
+- 🔐 Rate limit koruması / Rate limiting protection  
 
-## 🛠️ Kurulum
+---
 
-1. Sanal ortamı etkinleştir (önerilir):
-    ```
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-2. Gerekli kütüphaneleri yükle:
-    ```
-    pip install -r requirements.txt
-    ```
-    veya (eğer requirements yoksa):
-    ```
-    pip install fastapi uvicorn opencv-python mediapipe pillow numpy filetype slowapi python-multipart
-    ```
-3. Sunucuyu başlat:
-    ```
-    uvicorn vesikalik:app --reload
-    ```
-4. API dokümantasyonuna git:  
+## 🚀 Kurulum / Setup
+
+1. Ortamı hazırla / Create virtual environment:  
+   ```
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+2. Gerekli paketleri yükle / Install dependencies:  
+   ```
+   pip install -r requirements.txt
+   ```
+
+3. Sunucuyu çalıştır / Start server:  
+   ```
+   uvicorn vesikalik:app --reload
+   ```
+
+4. API arayüzü / API Docs:  
    [http://localhost:8000/docs](http://localhost:8000/docs)
 
-## ⚡️ API Endpointleri
+---
+
+## 🔁 Toplu Test Modülü (client.py) / Batch Test Module
+
+`client.py`, belirli bir klasördeki tüm fotoğrafları API'ye göndererek topluca test etmenizi sağlar.  
+`client.py` allows automated batch testing of multiple images via terminal.
+
+- Fotoğraflar `Kontrol/` klasörüne konur / Place images into `Kontrol/`  
+- Uygun olanlar `Uygun/`, diğerleri `Red/` klasörüne taşınır / Sorted accordingly  
+- Tüm sonuçlar `client_logs.txt` dosyasına kaydedilir / Logged to `client_logs.txt`  
+- Çok dilli sonuç seçeneği vardır / Supports `lang` param (`tr` / `en`)  
+- Çalıştırmak için / Run with:  
+   ```
+   python client.py
+   ```
+
+---
+
+## 🔗 API Endpoint'leri / API Endpoints
 
 - **POST `/upload/`**  
-  Vesikalık fotoğrafı yükle ve otomatik kontrole sokar.  
-  Parametreler:  
-    - `file`: Fotoğraf dosyası (JPEG/PNG)
-    - `lang`: tr/en (isteğe bağlı, varsayılan Türkçe)
+  Fotoğrafı yükler ve uygunluk kontrolü yapar.  
+  Uploads photo and checks compliance.
+
+  Parametreler / Parameters:  
+  - `file`: JPEG/PNG dosyası / image file  
+  - `lang`: `tr` veya `en` (opsiyonel / optional)  
 
 - **GET `/version`**  
-  API sürüm ve build tarihi bilgisini döndürür.
-
-## 💡 Kullanım Notları
-
-- Fotoğraf vesikalık kurallarına uygun değilse ayrıntılı, çok dilli hata mesajı döner.
-- Her başarılı yüklemede dosyanın orijinal adı, boyutu ve yükleme zamanı JSON olarak gelir.
-- Log dosyası otomatik oluşturulur (`vesikalik_logs.txt`).
-- Rate limit sistemi ile ardışık istekler engellenir.
-
-## 🔧 Gereksinimler
-
-- Python 3.9 veya üzeri
-- MacOS (M1/M2/M3/M4 uyumlu test edildi)
-- (Windows/Linux desteği de mümkündür)
-
-## 👩‍💻 Geliştirici & Proje Bilgisi
-
-- **Adı:** Ömrüm Ceren GÜLER
-- **İletişim:** omrumguler35@gmail.com
-- **Staj:** Yapay Zeka & Yazılım Geliştirme
-- **Yıl:** 2025
-- **Üniversite:** Çukurova Üniversitesi
-- **Staj Koordinatörü:** Mehmet Harun GÜLEN
-
-## Lisans
-
-MIT  
-(Tüm telif ve kullanım hakları geliştiriciye aittir.)
+  API sürümünü döndürür.  
+  Returns current version.
 
 ---
 
-**Not:**  
-Bu dosya, API'nin temel kullanımını ve geliştirme amaçlarını açıklar.  
-Güncellenmesi veya özelleştirilmesi gerekirse lütfen geliştirici ile iletişime geçiniz.
+## 💻 Gereksinimler / Requirements
+
+- Python 3.9+  
+- macOS (M serisi destekli) / M-series Macs supported  
+- Windows/Linux uyumlu olabilir / Windows/Linux compatibility possible  
 
 ---
 
----
+## 👩‍💻 Geliştirici / Developer
 
-## 📄 English Version (README)
-
-# Automatic Passport/ID Photo Checker API
-
-This project is a FastAPI-based backend service that automatically checks if an uploaded photo meets the standard requirements for official passport or ID photos.
-
-## 🚀 Features
-
-- **Face detection:** Automatic face detection using MediaPipe and OpenCV
-- **Size and aspect ratio check:** Dimension and ratio controls
-- **Background, sharpness, and color analysis**
-- **Blurriness and brightness/darkness checks**
-- **EXIF date and orientation analysis**
-- **Full-body photo detection**
-- **Accessory detection (optional, e.g., glasses, hats)**
-- **Multi-language support (Turkish/English)**
-- **Detailed error messages**
-- **Log and error tracking**
-- **Version endpoint**
-- **Rate limit protection** (prevents abuse)
-
-## 🛠️ Setup
-
-1. **Create and activate a virtual environment** (recommended):
-    ```
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-2. **Install required libraries:**
-    ```
-    pip install -r requirements.txt
-    ```
-    Or, if there is no requirements file:
-    ```
-    pip install fastapi uvicorn opencv-python mediapipe pillow numpy filetype slowapi python-multipart
-    ```
-3. **Start the server:**
-    ```
-    uvicorn vesikalik:app --reload
-    ```
-4. **Open the API documentation:**  
-   [http://localhost:8000/docs](http://localhost:8000/docs)
-
-## ⚡️ API Endpoints
-
-- **POST `/upload/`**  
-  Upload a passport/ID photo and run the automatic compliance check.  
-  Parameters:  
-    - `file`: Image file (JPEG/PNG)
-    - `lang`: tr/en (optional, default is Turkish)
-
-- **GET `/version`**  
-  Returns API version and build date info.
-
-## 💡 Usage Notes
-
-- If the photo does not meet the requirements, you will get detailed and multilingual error messages.
-- Each successful upload returns the original filename, file size, and upload time as JSON.
-- Log file is generated automatically (`vesikalik_logs.txt`).
-- Rate limiting is enabled to prevent abuse.
-
-## 🔧 Requirements
-
-- Python 3.9 or later
-- MacOS (tested on M1/M2/M3/M4)
-- (Windows/Linux support is possible)
-
-## 👩‍💻 Developer & Project Info
-
-- **Name:** Ömrüm Ceren GÜLER
-- **Contact:** omrumguler35@gmail.com
-- **Internship:** AI & Software Development
-- **Year:** 2025
-- **University:** Çukurova University
-- **Internship Coordinator:** Mehmet Harun GÜLEN
-
-## License
-
-MIT  
-(All copyright and usage rights belong to the developer.)
+- **Ad:** Ömrüm Ceren GÜLER  
+  **İletişim / Contact:** omrumguler35@gmail.com  
+  **Staj:** Yapay Zeka & Yazılım Geliştirme / AI & Software Development  
+  **Üniversite / University:** Çukurova Üniversitesi  
+  **Yıl / Year:** 2025  
+  **Koordinatör / Supervisor:** Mehmet Harun GÜLEN  
 
 ---
 
-**Note:**  
-This file explains the main usage and development goals of the API.  
-If you need to update or customize it, please contact the developer.
+## 📝 Lisans / License
 
----
+MIT License  
+Tüm hakları geliştiriciye aittir. / All rights reserved by the developer.

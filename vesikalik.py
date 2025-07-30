@@ -1,39 +1,16 @@
-# FastAPI ana paketleri, dosya upload ve istek için
-from fastapi import FastAPI, File, UploadFile, Request
-# Kullanıcıya düzgün JSON mesajı döndürmek için
+from fastapi import FastAPI, File, UploadFile, Request, Query
 from fastapi.responses import JSONResponse
-# Dosya kopyalamak için
-import shutil
-# Dosya/dizin işlemleri için
-import os
-# OpenCV: Resim işleme ve okuma
 import cv2
-# MediaPipe: Yüz tespiti için ML tabanlı kütüphane
-import mediapipe as mp
-# NumPy: Matematiksel işlemler ve dizi manipülasyonu
 import numpy as np
-# Dosya türünü tahmin etmek için
-import filetype
-# PIL: Resim işleme ve EXIF verilerini okumak için
 from PIL import Image, ExifTags
-# Tarih ve saat işlemleri için
-import datetime
-# Benzersiz ID'ler oluşturmak için
-import uuid
-# Regex: Dosya adında Türkçe karakter ve özel karakter kontrolü için
-import re
-# Path işlemleri için
+import filetype
 from pathlib import Path
+import datetime
 import logging
-# SlowAPI: Rate limiting için
-from slowapi import Limiter, _rate_limit_exceeded_handler
-# SlowAPI: İsteklerin IP adresini almak için
-from slowapi.util import get_remote_address
-# Rate limit aşımı hatası için
-from slowapi.errors import RateLimitExceeded
-# Log dosyası rotasyonu için
 from logging.handlers import RotatingFileHandler
-from fastapi import Query
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # --- HATA MESAJLARI ---
 # Hataları JSON formatında döndürmek için kullanılacak mesajlar
@@ -198,204 +175,142 @@ MIN_FILE_SIZE_MB = 0.1
 async def kontrol(file: UploadFile = File(...)):
     # Sadece dosya adını al, path silinir
     safe_filename = Path(file.filename).name
-    return {"filename": safe_filename, "message": "Fotoğraf alındı!"}
+    return JSONResponse({"status": "ok", "filename": safe_filename, "message": "Fotoğraf alındı!"})
 
-# --- KURAL 1: Dosya adı ile ilgili kontroller ---
-
-
+# --- KURAL 1: Dosya adı kontrolleri ---
 def check_filename_rules(filename, lang):
     errors = []
     # Türkçe karakter kontrolü
+    import re
     if re.search(r'[çÇğĞıİöÖşŞüÜ]', filename):
-        errors.append({"code": "KURAL_1",
-                       "msg": ERROR_MESSAGES["KURAL_1"][lang]["turkish"]})  # Türkçe karakterler
+        errors.append({"code": "KURAL_1", "msg": ERROR_MESSAGES["KURAL_1"][lang]["turkish"]})
+    # Boşluk kontrolü
     if " " in filename:
-        errors.append({"code": "KURAL_1",
-                       "msg": ERROR_MESSAGES["KURAL_1"][lang]["space"]})  # Boşluk kontrolü
-    # Çok uzun dosya adı (ör: >100 karakter)
+        errors.append({"code": "KURAL_1", "msg": ERROR_MESSAGES["KURAL_1"][lang]["space"]})
+    # Dosya adı uzunluk kontrolü
     if len(filename) > 100:
-        errors.append({"code": "KURAL_1",
-                       "msg": ERROR_MESSAGES["KURAL_1"][lang]["length"]})  # Dosya adı çok uzun
-    # Uygunsuz özel karakterler
+        errors.append({"code": "KURAL_1", "msg": ERROR_MESSAGES["KURAL_1"][lang]["length"]})
+    # Özel karakter kontrolü
     if re.search(r'[\\/:*?"<>|]', filename):
-        errors.append({"code": "KURAL_1",
-                       "msg": ERROR_MESSAGES["KURAL_1"][lang]["special"]})  # Özel karakterler
+        errors.append({"code": "KURAL_1", "msg": ERROR_MESSAGES["KURAL_1"][lang]["special"]})
     return errors
 
 # --- KURAL 2: Dosya tipi ve MIME-Type kontrolü ---
-
-
 def check_filetype(file, lang):
     file.file.seek(0)
-    # filetype.guess() dosyanın içinden türünü tahmin eder.
-    kind = filetype.guess(file.file.read(261))
+    kind = filetype.guess(file.file.read(261))  # Dosya tipi kontrolü
     file.file.seek(0)
     errors = []
     if not kind or kind.mime not in ['image/jpeg', 'image/png']:
-        errors.append({"code": "KURAL_2",
-                       "msg": ERROR_MESSAGES["KURAL_2"][lang]})
+        errors.append({"code": "KURAL_2", "msg": ERROR_MESSAGES["KURAL_2"][lang]})
     return errors, kind
 
 # --- KURAL 3: Dosya uzantısı kontrolü ---
-
-
 def check_extension(filename, lang):
     errors = []
     ext = filename.split('.')[-1].lower()
-    # Sadece jpg, jpeg, png kabul et
+    # Dosya uzantısı kontrolü
     if ext not in ALLOWED_EXTENSIONS:
-        errors.append({"code": "KURAL_3",
-                       "msg": ERROR_MESSAGES["KURAL_3"][lang]["ext"].format(ext=ext)})
-    # Dosya adında uzantı yoksa
+        errors.append({"code": "KURAL_3", "msg": ERROR_MESSAGES["KURAL_3"][lang]["ext"].format(ext=ext)})
     if '.' not in filename:
-        errors.append({"code": "KURAL_3",
-                       "msg": ERROR_MESSAGES["KURAL_3"][lang]["missing"]})
+        errors.append({"code": "KURAL_3", "msg": ERROR_MESSAGES["KURAL_3"][lang]["missing"]})
     return errors, ext
 
 # --- KURAL 4: Dosya uzantısı ve içeriği uyuşmazlık kontrolü ---
-
-
 def check_mime_extension(ext, kind, lang):
     errors = []
+    # Uzantı-mime uyumu kontrolü
     if ext in MIME_MAP and kind and kind.mime != MIME_MAP[ext]:
-        errors.append({"code": "KURAL_4",
-                       "msg": ERROR_MESSAGES["KURAL_4"][lang]})
+        errors.append({"code": "KURAL_4", "msg": ERROR_MESSAGES["KURAL_4"][lang]})
     return errors
 
-# --- KURAL 5: Dosya boyutu kontrolü (dosya henüz diske yazılmadan, dosya RAM'deyken!) ---
-
-
+# --- KURAL 5: Dosya boyutu kontrolü ---
 def check_file_size(file, lang):
+    import os
     file.file.seek(0, os.SEEK_END)
     file_size = file.file.tell() / (1024 * 1024)  # MB cinsinden
     file.file.seek(0)
     errors = []
     if file_size > MAX_FILE_SIZE_MB:
-        errors.append({"code": "KURAL_5",
-                       "msg": ERROR_MESSAGES["KURAL_5"][lang]["max"].format(size=file_size)})
+        errors.append({"code": "KURAL_5", "msg": ERROR_MESSAGES["KURAL_5"][lang]["max"].format(size=file_size)})
     elif file_size == 0:
-        errors.append({"code": "KURAL_5",
-                       "msg": ERROR_MESSAGES["KURAL_5"][lang]["empty"]})  # Dosya boş
+        errors.append({"code": "KURAL_5", "msg": ERROR_MESSAGES["KURAL_5"][lang]["empty"]})
     return errors, file_size
 
 # --- KURAL 6: Fotoğraf boyutu ve en-boy oranı kontrolü ---
-
-
 def check_image_dimensions(img, lang):
     errors = []
-    h, w = img.shape[:2]                      # Yükseklik (h) ve genişlik (w)
+    h, w = img.shape[:2]  # Yükseklik ve genişlik
     aspect_ratio = w / h
-
-    # Minimum çözünürlük (ör: 300x400)
+    # Minimum çözünürlük kontrolü
     if h < 400 or w < 300:
-        errors.append({"code": "KURAL_6",
-                       "msg": ERROR_MESSAGES["KURAL_6"][lang]["size"].format(w=w, h=h)})
-    # En-boy oranı kontrolü (vesikalıkta genelde 3:4, yani oran 0.75 civarı olmalı)
+        errors.append({"code": "KURAL_6", "msg": ERROR_MESSAGES["KURAL_6"][lang]["size"].format(w=w, h=h)})
+    # En-boy oranı kontrolü
     if aspect_ratio < 0.6 or aspect_ratio > 0.9:
-        errors.append({"code": "KURAL_6",
-                       "msg": ERROR_MESSAGES["KURAL_6"][lang]["ratio"].format(ratio=aspect_ratio)})
+        errors.append({"code": "KURAL_6", "msg": ERROR_MESSAGES["KURAL_6"][lang]["ratio"].format(ratio=aspect_ratio)})
     return errors
 
-# --- KURAL 7: Yüz, pozisyon, arka plan, gözlük, parlaklık vb. kontroller ---
-
-
+# --- KURAL 7: Yüz tespit fonksiyonu ---
 def detect_face(image_path, lang):
-    # MediaPipe yüz tespit modülünü çağır
+    import mediapipe as mp
     mp_face = mp.solutions.face_detection
-    # Dosyayı OpenCV ile oku (resim olarak)
     img = cv2.imread(image_path)
     if img is None:
-        # Resim açılamadıysa: hata kodu dön
         return -1, None, 0
-    # MediaPipe için resmi RGB'ye çevir
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     with mp_face.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection:
-        # Tespit edilen yüzlerin listesi
         result = face_detection.process(img_rgb)
         if result.detections:
-            # Kaç yüz bulundu?
             num_faces = len(result.detections)
-            # İlk yüzü al (en büyük/genel olarak)
             detection = result.detections[0]
-            # Yüzün oranlara göre bounding box'u
             bboxC = detection.location_data.relative_bounding_box
-            # Fotoğrafın yüksekliği, genişliği
             h, w, _ = img.shape
-            # Yüzün genişliği ve yüksekliği (piksel cinsinden)
             box_w, box_h = bboxC.width * w, bboxC.height * h
-            # Yüzün kapladığı toplam alan (piksel)
             face_area = box_w * box_h
-            img_area = w * h                                    # Tüm fotoğrafın alanı
-            # Yüzün fotoğrafa oranı (% olarak, 0.2 = %20)
+            img_area = w * h
             face_ratio = face_area / img_area
-            face_center_x = bboxC.xmin * w + box_w / \
-                2          # Yüzün merkezi nerde? (x,y)
+            face_center_x = bboxC.xmin * w + box_w / 2
             face_center_y = bboxC.ymin * h + box_h / 2
-            center_x, center_y = w / 2, h / 2                   # Fotoğrafın merkezi nerede?
-            # Yüzün merkezi ile fotoğraf merkezi arasındaki fark (0 ise tam ortada)
+            center_x, center_y = w / 2, h / 2
             offset_x = abs(face_center_x - center_x) / w
             offset_y = abs(face_center_y - center_y) / h
             return 1, {"face_ratio": face_ratio, "offset_x": offset_x, "offset_y": offset_y}, num_faces
         else:
             return 0, None, 0
-# --- KURAL 8: Yüz tespiti ve vesikalık kurallarını kontrol eden fonksiyon ---
-
-
+# --- KURAL 8: Yüz tespiti ve vesikalık kuralları kontrolü ---
 def check_face_rules(image_path, lang):
     errors = []
-    face_count, face_info, num_faces = detect_face(
-        image_path, lang)  # Yüz tespit et
+    face_count, face_info, num_faces = detect_face(image_path, lang)
     if face_count == -1:
-        errors.append({"code": "KURAL_8",
-                       "msg": ERROR_MESSAGES["KURAL_8"][lang]["cannot_open"]})  # Fotoğraf açılamadı!
+        errors.append({"code": "KURAL_8", "msg": ERROR_MESSAGES["KURAL_8"][lang]["cannot_open"]})
     elif face_count == 0:
-        errors.append({"code": "KURAL_8",
-                       "msg": ERROR_MESSAGES["KURAL_8"][lang]["no_face"]})  # Yüz bulunamadı!
+        errors.append({"code": "KURAL_8", "msg": ERROR_MESSAGES["KURAL_8"][lang]["no_face"]})
     elif num_faces > 1:
-        errors.append({"code": "KURAL_8",
-                       "msg": ERROR_MESSAGES["KURAL_8"][lang]["many_faces"]})  # Birden fazla yüz bulundu!
+        errors.append({"code": "KURAL_8", "msg": ERROR_MESSAGES["KURAL_8"][lang]["many_faces"]})
     if face_info is not None:
-        # Yüz çok küçükse (vesikalıkta yüz büyük olmalı!)
-        if face_info["face_ratio"] < 0.12:  # %12'den az kaplıyorsa
-            errors.append({"code": "KURAL_8",
-                           "msg": ERROR_MESSAGES["KURAL_8"][lang]["small"]})  # Yüz çok küçük!
-        # Yüz merkezde değilse (vesikalıkta yüz neredeyse tam ortada olmalı)
+        # Yüz boyutu kontrolü
+        if face_info["face_ratio"] < 0.12:
+            errors.append({"code": "KURAL_8", "msg": ERROR_MESSAGES["KURAL_8"][lang]["small"]})
+        # Yüz merkezde mi kontrolü
         if face_info["offset_x"] > 0.3 or face_info["offset_y"] > 0.3:
-            errors.append({"code": "KURAL_8",
-                           "msg": ERROR_MESSAGES["KURAL_8"][lang]["not_centered"]})  # Yüz fotoğrafın ortasında değil!
+            errors.append({"code": "KURAL_8", "msg": ERROR_MESSAGES["KURAL_8"][lang]["not_centered"]})
     return errors, face_info
 
-# --- KURAL 9: Fotoğrafın bulanık olup olmadığını kontrol eden fonksiyon ---
-
-
+# --- KURAL 9: Fotoğraf bulanıklık kontrolü ---
 def is_blurry(image_path, threshold=250):
-    """
-    Fotoğraf net mi bulanık mı? Laplacian varyans ile ölçülür.
-    threshold: Netlik sınırı (daha yüksek = daha net olmalı). 
-    Genellikle 100-200 arası iyi çalışır.
-    True (bulanık), False (net) döner.
-    """
-    img = cv2.imread(
-        image_path, cv2.IMREAD_GRAYSCALE)  # Fotoğrafı gri tonda oku
+    # Fotoğraf bulanıklık kontrolü
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
-        # Dosya açılamazsa bulanık say. True bulanık olduğunu gösterir bu fonksiyon için.
         return True
-    laplacian_var = cv2.Laplacian(
-        img, cv2.CV_64F).var()  # Netlik skorunu hesapla
-    return laplacian_var < threshold  # Skor düşükse bulanık kabul et
+    laplacian_var = cv2.Laplacian(img, cv2.CV_64F).var()
+    return laplacian_var < threshold
 
-# --- KURAL 10: Fotoğrafta boydan (full body) olup olmadığını anlamak için MediaPipe Pose kullanılır ---
-
-
+# --- KURAL 10: Boydan fotoğraf kontrolü ---
 def is_full_body(image_path, threshold=0.6):
-    """
-    Fotoğrafta boydan vücut (belden aşağı, ör: diz, ayak bileği) görünüyor mu?
-    Eğer MediaPipe pose ile diz/ayak/kalça noktaları görünüyorsa, boydan sayılır!
-    """
     import mediapipe as mp
     img = cv2.imread(image_path)
     if img is None:
-        return False  # Fotoğraf açılamazsa boydan sayılmaz
+        return False
     mp_pose = mp.solutions.pose
     with mp_pose.Pose(static_image_mode=True) as pose:
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -408,22 +323,15 @@ def is_full_body(image_path, threshold=0.6):
             mp_pose.PoseLandmark.LEFT_ANKLE,
             mp_pose.PoseLandmark.RIGHT_ANKLE,
         ]
-        h, w, _ = img.shape
         found = 0
         for p in wanted:
             landmark = results.pose_landmarks.landmark[p]
             if 0.05 < landmark.x < 0.95 and 0.05 < landmark.y < 0.95:
                 found += 1
         return found >= 2
-# --- KURAL 11: Fotoğrafta gözlük (özellikle güneş gözlüğü) var mı? ---
-
-
+# --- KURAL 11: Gözlük kontrolü ---
 def is_sunglasses_present(image_path):
-    """
-    Fotoğrafta MediaPipe ile göz bölgesi tespit edilir.
-    Gözlerin olduğu bölgede koyu ve homojen (simsiyah gibi) bir alan varsa, büyük olasılıkla güneş gözlüğü takılmıştır.
-    Basit bir ortalama parlaklık kontrolü yapıyoruz!
-    """
+    import mediapipe as mp
     mp_face_mesh = mp.solutions.face_mesh
     img = cv2.imread(image_path)
     if img is None:
@@ -454,15 +362,8 @@ def is_sunglasses_present(image_path):
                 if mean_val < 60:
                     return True
         return False
-# --- KURAL 12: Arka planın temiz ve sade olup olmadığını kontrol et ---
-
-
+# --- KURAL 12: Arka plan kontrolü ---
 def is_background_clean(image_path, brightness_threshold=80, color_std_threshold=100):
-    """
-    Arka plan açık renkli ve sade mi?
-    Kenar bölgelerden (üst, alt, sağ, sol) örnek alınır. 
-    Ortalama parlaklık düşükse ya da renkler çok değişkense arka plan kirli/koyu sayılır.
-    """
     img = cv2.imread(image_path)
     if img is None:
         return "error"
@@ -475,21 +376,15 @@ def is_background_clean(image_path, brightness_threshold=80, color_std_threshold
         img[:, -border_width:, :]
     ]
     border_pixels = np.concatenate([b.reshape(-1, 3) for b in borders], axis=0)
-    brightness = np.mean(cv2.cvtColor(
-        border_pixels.reshape(-1, 1, 3), cv2.COLOR_BGR2GRAY))
+    brightness = np.mean(cv2.cvtColor(border_pixels.reshape(-1, 1, 3), cv2.COLOR_BGR2GRAY))
     color_std = np.std(border_pixels, axis=0).mean()
     if brightness < brightness_threshold:
         return "dark"
     if color_std > color_std_threshold:
         return "colorful"
     return "clean"
-# --- KURAL 13: Fotoğrafın çok karanlık veya çok parlak olup olmadığını kontrol et ---
-
-
+# --- KURAL 13: Parlaklık/karanlık kontrolü ---
 def is_too_dark_or_bright(image_path, dark_threshold=50, bright_threshold=225):
-    """
-    Fotoğraf çok karanlık veya çok parlak mı? Ortalama parlaklık ile ölçülür.
-    """
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         return True
@@ -500,15 +395,8 @@ def is_too_dark_or_bright(image_path, dark_threshold=50, bright_threshold=225):
         return "bright"
     return None
 
-# --- KURAL 14: Fotoğrafın EXIF verilerini okuyup, oryantasyonu düzeltme ve tarih kontrolü ---
-
-
+# --- KURAL 14: EXIF ve tarih kontrolü ---
 def correct_orientation_and_check_date(file, lang):
-    """
-    Fotoğrafı PIL ile aç, EXIF'ten tarihi ve oryantasyonu oku.
-    - Yan dönmüşse düzeltir, kaydeder.
-    - Çok eski (ör: 5 yıldan eski) ise uyarı döndürür.
-    """
     errors = []
     file.file.seek(0)
     try:
@@ -522,13 +410,11 @@ def correct_orientation_and_check_date(file, lang):
                     photo_date = value
                     break
         if photo_date:
-            photo_datetime = datetime.datetime.strptime(
-                photo_date, '%Y:%m:%d %H:%M:%S')
+            photo_datetime = datetime.datetime.strptime(photo_date, '%Y:%m:%d %H:%M:%S')
             now = datetime.datetime.now()
             years_old = (now - photo_datetime).days / 365.25
             if years_old > 10:
-                errors.append({"code": "KURAL_14",
-                               "msg": ERROR_MESSAGES["KURAL_14"][lang]})
+                errors.append({"code": "KURAL_14", "msg": ERROR_MESSAGES["KURAL_14"][lang]})
         orientation = None
         if exif is not None:
             for tag, value in exif.items():
@@ -544,84 +430,94 @@ def correct_orientation_and_check_date(file, lang):
             elif orientation == 8:
                 img = img.rotate(90, expand=True)
         return img, errors
-    except Exception as e:
+    except Exception:
         return None, [{"code": "KURAL_14", "msg": ERROR_MESSAGES["KURAL_14"][lang]}]
-# --- ANA ENDPOINT: Fotoğrafı upload et, tüm vesikalık kontrollerini sırayla yap ---
-
-
+# --- ANA ENDPOINT: Fotoğrafı yükle ve vesikalık kurallarını sırayla kontrol et ---
 @app.post("/upload/")
-@limiter.limit("30/minute")   # ← Her IP dakikada 30 yükleme hakkı
+@limiter.limit("30/minute")
 async def upload_image(
     request: Request,
     file: UploadFile = File(...),
-    lang: str = Query(
-        "tr", description="Language selection / Dil seçimi: 'tr' (Turkish) or 'en' (English)")
+    lang: str = Query("tr", description="Dil seçimi: 'tr' veya 'en'")
 ):
+    import os
+    import uuid
+    import shutil
     try:
         errors = []
+        sebep = ""
 
+        # Dil kontrolü
         if lang not in ["tr", "en"]:
+            sebep = "Lütfen geçerli bir dil seçiniz. (tr veya en)"
             return JSONResponse({
                 "status": "error",
-                "errors": [{"code": "KURAL_0",
-                            "msg": "Lütfen geçerli bir dil seçiniz. (tr veya en)"
-                            }]
+                "errors": [{"code": "KURAL_0", "msg": sebep}]
             })
 
-        # Benzersiz ve güvenli dosya adı oluştur
-        # Sadece dosya adını al, path'i sil
+        # Dosya adı oluşturma
         original_filename = Path(file.filename).name
-        unique_id = uuid.uuid4().hex[:8]              # 8 karakterlik random id
-        # Yeni güvenli ve benzersiz dosya adın
+        unique_id = uuid.uuid4().hex[:8]
         filename = f"{unique_id}_{original_filename}"
 
-        # --- KURAL 1: Dosya adı kontrolleri ---
-        errors.extend(check_filename_rules(filename, lang))
+        # KURAL 1: Dosya adı kontrolleri
+        err_filename_rules = check_filename_rules(filename, lang)
+        for err in err_filename_rules:
+            if not sebep:
+                sebep = err.get("msg", "")
+            errors.append({"code": err.get("code", "KURAL_1"), "msg": err.get("msg", "")})
 
-        # --- KURAL 2: Dosya tipi ve MIME-Type kontrolü ---
+        # KURAL 2: Dosya tipi kontrolü
         err, kind = check_filetype(file, lang)
-        errors.extend(err)
+        for e in err:
+            if not sebep:
+                sebep = e.get("msg", "")
+            errors.append({"code": e.get("code", "KURAL_2"), "msg": e.get("msg", "")})
 
-        # --- KURAL 3: Dosya uzantısı kontrolü ---
+        # KURAL 3: Dosya uzantısı kontrolü
         err, ext = check_extension(filename, lang)
-        errors.extend(err)
+        for e in err:
+            if not sebep:
+                sebep = e.get("msg", "")
+            errors.append({"code": e.get("code", "KURAL_3"), "msg": e.get("msg", "")})
 
-        # --- KURAL 4: Uzantı-mime uyumu (Dosya uzantısı ve içeriği uyuşmazlık kontrolü) ---
-        errors.extend(check_mime_extension(ext, kind, lang))
+        # KURAL 4: Uzantı-mime uyumu kontrolü
+        err_mime = check_mime_extension(ext, kind, lang)
+        for e in err_mime:
+            if not sebep:
+                sebep = e.get("msg", "")
+            errors.append({"code": e.get("code", "KURAL_4"), "msg": e.get("msg", "")})
 
-        # --- KURAL 5: Dosya boyutu kontrolü (henüz RAM'deyken, diske yazılmadan) ---
+        # KURAL 5: Dosya boyutu kontrolü
         err, file_size = check_file_size(file, lang)
-        errors.extend(err)
+        for e in err:
+            if not sebep:
+                sebep = e.get("msg", "")
+            errors.append({"code": e.get("code", "KURAL_5"), "msg": e.get("msg", "")})
 
-        # --- KURAL 14: EXIF meta verisi ve rotasyon kontrolü ---
+        # KURAL 14: EXIF ve tarih kontrolü
         img_pil, exif_errors = correct_orientation_and_check_date(file, lang)
         if exif_errors:
-            errors.extend(exif_errors)
+            for e in exif_errors:
+                if not sebep:
+                    sebep = e.get("msg", "")
+                errors.append({"code": e.get("code", "KURAL_14"), "msg": e.get("msg", "")})
 
         # uploads klasörü yoksa oluştur
         if not os.path.exists("uploads"):
             os.makedirs("uploads")
         file_location = f"uploads/{filename}"
 
-        # KRİTİK HATALAR ---
-        # Eğer kritik hatalar varsa, dosyayı kaydetme, logla ve hata dön
         # Kritik hatalar: fotoğraf açılamadı, boş dosya, yanlış tür
         kritik_hatalar = [
-            # Fotoğraf açılamadı!
             ERROR_MESSAGES["KURAL_8"][lang]["cannot_open"],
-            ERROR_MESSAGES["KURAL_5"][lang]["empty"],  # Dosya boş!
-            # Yüklenen dosya gerçek bir JPEG/PNG görsel değil.
+            ERROR_MESSAGES["KURAL_5"][lang]["empty"],
             ERROR_MESSAGES["KURAL_2"][lang]
         ]
-        # Substring ile ekstra kontrol
-        # Eğer hata mesajları arasında kritik hatalardan biri varsa veya dosya uzantısı ile gerçek tip uyuşmuyorsa
-        # (ör: dosya adı .jpg ama içeriği png ise), hata dön
         if (
-            any(isinstance(h, dict) and h.get("msg")
-                in kritik_hatalar for h in errors)
+            any(isinstance(h, dict) and h.get("msg") in kritik_hatalar for h in errors)
             or any(
-                isinstance(h, dict) and "uzantısı ile dosyanın gerçek tipi" in h.get(
-                    "msg", "")
+                isinstance(h, dict) and "uzantısı ile dosyanın gerçek tipi" in h.get("msg", "")
                 for h in errors
             )
         ):
@@ -633,50 +529,57 @@ async def upload_image(
             logging.info(f"[HATA] {filename} - Hatalar: {errors}")
             return JSONResponse({"status": "error", "errors": errors})
 
-        # Dosyayı kaydet (Pillow ile ya da ham şekilde)
+        # Dosyayı kaydet
         if img_pil:
             img_pil.save(file_location)
         else:
             with open(file_location, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 
-        # --- KURAL 6: Fotoğraf boyutu ve en-boy oranı ---
+        # KURAL 6: Fotoğraf boyutu ve en-boy oranı
         img = cv2.imread(file_location)
         if img is None:
-            errors.append({"code": "KURAL_6",
-                           "msg": ERROR_MESSAGES["KURAL_6"][lang]["size"].format(w="?", h="?")})  # Fotoğraf okunamadı!
+            sebep = ERROR_MESSAGES["KURAL_6"][lang]["size"].format(w="?", h="?")
+            errors.append({"code": "KURAL_6", "msg": sebep})
         else:
-            errors.extend(check_image_dimensions(img, lang))
+            err_dim = check_image_dimensions(img, lang)
+            for e in err_dim:
+                if not sebep:
+                    sebep = e.get("msg", "")
+                errors.append({"code": e.get("code", "KURAL_6"), "msg": e.get("msg", "")})
 
-        # --- KURAL 8: Yüz tespiti ve vesikalık kuralları kontrolleri  ---
+        # KURAL 8: Yüz tespiti ve kurallar
         err, face_info = check_face_rules(file_location, lang)
-        errors.extend(err)
+        for e in err:
+            if not sebep:
+                sebep = e.get("msg", "")
+            errors.append({"code": e.get("code", "KURAL_8"), "msg": e.get("msg", "")})
 
-        # --- KURAL 9-13: Diğer özel kurallar (fotoğraf bulanıklığı, boydan, gözlük, arka plan, parlaklık) ---
+        # KURAL 9-13: Diğer özel kurallar
         if face_info is not None:
             if is_blurry(file_location):
-                errors.append({"code": "KURAL_9",
-                               "msg": ERROR_MESSAGES["KURAL_9"][lang]})  # Fotoğraf bulanık!
+                sebep = ERROR_MESSAGES["KURAL_9"][lang]
+                errors.append({"code": "KURAL_9", "msg": sebep})
             if is_full_body(file_location):
-                errors.append({"code": "KURAL_10",
-                               "msg": ERROR_MESSAGES["KURAL_10"][lang]})  # Fotoğraf boydan çekilmiş!
+                sebep = ERROR_MESSAGES["KURAL_10"][lang]
+                errors.append({"code": "KURAL_10", "msg": sebep})
             if is_sunglasses_present(file_location):
-                errors.append({"code": "KURAL_11",
-                               "msg": ERROR_MESSAGES["KURAL_11"][lang]})  # Fotoğrafta koyu gözlük tespit edildi!
+                sebep = ERROR_MESSAGES["KURAL_11"][lang]
+                errors.append({"code": "KURAL_11", "msg": sebep})
             bg_status = is_background_clean(file_location)
             if bg_status == "dark":
-                errors.append({"code": "KURAL_12",
-                               "msg": ERROR_MESSAGES["KURAL_12"][lang]["dark"]})
+                sebep = ERROR_MESSAGES["KURAL_12"][lang]["dark"]
+                errors.append({"code": "KURAL_12", "msg": sebep})
             elif bg_status == "colorful":
-                errors.append({"code": "KURAL_12",
-                               "msg": ERROR_MESSAGES["KURAL_12"][lang]["colorful"]})  # "clean" ise hata ekleme!
+                sebep = ERROR_MESSAGES["KURAL_12"][lang]["colorful"]
+                errors.append({"code": "KURAL_12", "msg": sebep})
             brightness_status = is_too_dark_or_bright(file_location)
             if brightness_status == "dark":
-                errors.append({"code": "KURAL_13",
-                               "msg": ERROR_MESSAGES["KURAL_13"][lang]["dark"]})  # Fotoğraf çok karanlık!
+                sebep = ERROR_MESSAGES["KURAL_13"][lang]["dark"]
+                errors.append({"code": "KURAL_13", "msg": sebep})
             elif brightness_status == "bright":
-                errors.append({"code": "KURAL_13",
-                               "msg": ERROR_MESSAGES["KURAL_13"][lang]["bright"]})  # Fotoğraf çok parlak!
+                sebep = ERROR_MESSAGES["KURAL_13"][lang]["bright"]
+                errors.append({"code": "KURAL_13", "msg": sebep})
 
         # Hatalıysa dosyayı sil, logla ve hata dön
         if errors:
@@ -686,7 +589,10 @@ async def upload_image(
                     os.remove(file_location)
             except Exception:
                 pass
-            return JSONResponse({"status": "error", "errors": errors})
+            return JSONResponse({
+                "status": "error",
+                "errors": errors
+            })
 
         # Başarılı log ve dönüş
         logging.info(
@@ -696,12 +602,9 @@ async def upload_image(
 
         return JSONResponse({
             "status": "ok",
-            "file_path": file_location,                  # Sunucudaki dosya yolu
-            # Yüz oranı (büyüklüğü)
+            "file_path": file_location,
             "face_ratio": face_info["face_ratio"] if face_info else None,
-            # Yüzün yatay merkeze yakınlığı
             "face_offset_x": face_info["offset_x"] if face_info else None,
-            # Yüzün dikey merkeze yakınlığı
             "face_offset_y": face_info["offset_y"] if face_info else None,
             "message": SUCCESS_MESSAGES[lang],
             "original_filename": original_filename,
@@ -713,7 +616,8 @@ async def upload_image(
         user_msg = ERROR_MESSAGES["SYSTEM"][lang]
         logging.error(
             f"[SİSTEM HATASI] {file.filename if file else '-'} - {e}",
-            exc_info=True)  # <-- bu eklenirse, detaylı hata (stack trace) loga eklenir!
+            exc_info=True
+        )
         return JSONResponse({
             "status": "error",
             "errors": [{"code": "SYSTEM", "msg": user_msg}]

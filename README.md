@@ -1,100 +1,176 @@
-# 📸 Vesikalık Fotoğraf Otomatik Kontrol API'si / Passport Photo Auto-Checker API
+# Vesikalık Fotoğraf Otomatik Kontrol Sistemi
 
-Bu proje, vesikalık fotoğrafların belirli standartlara uygunluğunu kontrol eden FastAPI tabanlı bir web servisidir.  
-This project is a FastAPI-based backend service that checks if a photo meets official ID/passport photo standards.
-
----
-
-## 🧠 Özellikler / Features
-
-- 👤 Yüz tespiti / Face detection (MediaPipe + OpenCV)  
-- 📏 Boyut ve oran kontrolü / Size & ratio control  
-- 🧱 Arka plan, kontrast ve renk analizi / Background, contrast & color analysis  
-- 🔍 Bulanıklık ve ışık analizi / Blur & brightness check  
-- 📆 EXIF tarih/rotasyon kontrolü / EXIF timestamp and rotation check  
-- 🧢 Aksesuar tespiti (opsiyonel) / Accessory detection (optional)  
-- 🌍 Çoklu dil desteği / Multilingual support (TR/EN)  
-- 📝 Detaylı hata mesajları / Detailed error messages  
-- 📊 Loglama ve istatistik desteği / Logging and statistics  
-- 🔐 Rate limit koruması / Rate limiting protection  
+## Proje Açıklaması
+Bu proje, vesikalık (kimlik/pasaport) fotoğrafların resmi standartlara uygunluğunu otomatik olarak değerlendiren bir API ve toplu kontrol aracıdır. FastAPI tabanlı arka uç servis, çeşitli görüntü işleme teknikleriyle fotoğrafları analiz eder ve ayrıntılı uygunluk raporları sunar. Ayrıca, toplu test için komut satırı istemcisi (client.py) ile birlikte gelir.
 
 ---
 
-## 🚀 Kurulum / Setup
+## Özellikler
+- Yüz tespiti (MediaPipe, OpenCV)
+- Fotoğraf boyutu, çözünürlük ve oran kontrolü
+- Arka plan, kontrast ve renk analizi
+- Bulanıklık ve ışık/aydınlatma denetimi
+- EXIF veri ve rotasyon kontrolü
+- Aksesuar (gözlük, şapka vb.) tespiti (isteğe bağlı)
+- Çoklu dil desteği (Türkçe/İngilizce)
+- Detaylı hata ve açıklama mesajları
+- Loglama ve istatistik toplama
+- Rate limit (istek kısıtlama) koruması
 
-1. Ortamı hazırla / Create virtual environment:  
+---
+
+## Kurulum
+1. Sanal ortam oluşturun:
    ```
    python3 -m venv venv
    source venv/bin/activate
    ```
+   ```
+   # Windows
+   venv\Scripts\activate
 
-2. Gerekli paketleri yükle / Install dependencies:  
+   # Linux
+   source venv/bin/activate
+   ```
+2. Gereksinimleri yükleyin:
    ```
    pip install -r requirements.txt
    ```
 
-3. Sunucuyu çalıştır / Start server:  
+---
+
+## Çalıştırma Adımları
+### API Sunucusu
+1. Sunucuyu başlatın:
    ```
    uvicorn vesikalik:app --reload
    ```
+2. Dokümantasyon arayüzü: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-4. API arayüzü / API Docs:  
-   [http://localhost:8000/docs](http://localhost:8000/docs)
-
----
-
-## 🔁 Toplu Test Modülü (client.py) / Batch Test Module
-
-`client.py`, belirli bir klasördeki tüm fotoğrafları API'ye göndererek topluca test etmenizi sağlar.  
-`client.py` allows automated batch testing of multiple images via terminal.
-
-- Fotoğraflar `Kontrol/` klasörüne konur / Place images into `Kontrol/`  
-- Uygun olanlar `Uygun/`, diğerleri `Red/` klasörüne taşınır / Sorted accordingly  
-- Tüm sonuçlar `client_logs.txt` dosyasına kaydedilir / Logged to `client_logs.txt`  
-- Çok dilli sonuç seçeneği vardır / Supports `lang` param (`tr` / `en`)  
-- Çalıştırmak için / Run with:  
+### Toplu Test Aracı (client.py)
+1. Kontrol edilecek fotoğrafları `Kontrol/` klasörüne yerleştirin.
+2. Terminalden çalıştırın:
    ```
    python client.py
    ```
+3. Sonuçlar, uygun fotoğraflar için `Uygun/`, reddedilenler için `Red/` klasörlerine ve ayrıca `client_logs.txt` dosyasına kaydedilir.
+4. `lang` parametresi ile dil seçebilirsiniz (`tr` veya `en`).
 
 ---
 
-## 🔗 API Endpoint'leri / API Endpoints
-
+## API Endpoint'leri
 - **POST `/upload/`**  
-  Fotoğrafı yükler ve uygunluk kontrolü yapar.  
-  Uploads photo and checks compliance.
-
-  Parametreler / Parameters:  
-  - `file`: JPEG/PNG dosyası / image file  
-  - `lang`: `tr` veya `en` (opsiyonel / optional)  
+  Fotoğraf dosyasını alır ve uygunluk kontrolü yapar.
+  - Parametreler:
+    - `file`: JPEG veya PNG formatında fotoğraf dosyası
+    - `lang`: `tr` veya `en` (opsiyonel)
 
 - **GET `/version`**  
-  API sürümünü döndürür.  
-  Returns current version.
+  API sürüm bilgisini döndürür.
 
 ---
 
-## 💻 Gereksinimler / Requirements
-
-- Python 3.9+  
-- macOS (M serisi destekli) / M-series Macs supported  
-- Windows/Linux uyumlu olabilir / Windows/Linux compatibility possible  
+## Gereksinimler
+- Python 3.9 veya üzeri
+- macOS (M serisi desteklenir), Windows ve Linux ile uyumlu
 
 ---
 
-## 👩‍💻 Geliştirici / Developer
-
-- **Ad:** Ömrüm Ceren GÜLER  
-  **İletişim / Contact:** omrumguler35@gmail.com  
-  **Staj:** Yapay Zeka & Yazılım Geliştirme / AI & Software Development  
-  **Üniversite / University:** Çukurova Üniversitesi  
-  **Yıl / Year:** 2025  
-  **Koordinatör / Supervisor:** Mehmet Harun GÜLEN  
+## Geliştirici Bilgisi
+- **İsim:** Ömrüm Ceren GÜLER
+- **E-posta:** omrumguler35@gmail.com
+- **Staj:** Yapay Zeka & Yazılım Geliştirme
+- **Üniversite:** Çukurova Üniversitesi
+- **Yıl:** 2025
+- **Koordinatör:** Mehmet Harun GÜLEN
 
 ---
 
-## 📝 Lisans / License
 
-MIT License  
-Tüm hakları geliştiriciye aittir. / All rights reserved by the developer.
+# Passport Photo Auto-Checker System
+
+## Project Description
+This project provides an API and a batch control tool for automatically checking official ID/passport photos for compliance with standards. The FastAPI-based backend analyzes images using computer vision techniques and produces detailed compliance reports. A command-line client (client.py) is included for batch testing.
+
+---
+
+## Features
+- Face detection (MediaPipe, OpenCV)
+- Photo size, resolution, and aspect ratio control
+- Background, contrast, and color analysis
+- Blur and brightness/illumination check
+- EXIF data and rotation check
+- Accessory (glasses, hats, etc.) detection (optional)
+- Multi-language support (Turkish/English)
+- Detailed error and explanation messages
+- Logging and statistics
+- Rate limiting protection
+
+---
+
+## Installation
+1. Create a virtual environment:
+   ```
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+   ```
+   # Windows
+   venv\Scripts\activate
+
+   # Linux
+   source venv/bin/activate
+   ```
+2. Install requirements:
+   ```
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Usage
+### API Server
+1. Start the server:
+   ```
+   uvicorn vesikalik:app --reload
+   ```
+2. Documentation interface: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Batch Test Tool (client.py)
+1. Place images to be checked into the `Kontrol/` folder.
+2. Run via terminal:
+   ```
+   python client.py
+   ```
+3. Results are saved: compliant photos to `Uygun/`, rejected ones to `Red/`, and all logs to `client_logs.txt`.
+4. Use the `lang` parameter for language selection (`tr` or `en`).
+
+---
+
+## API Endpoints
+- **POST `/upload/`**  
+  Accepts an image file and checks for compliance.
+  - Parameters:
+    - `file`: Photo file in JPEG or PNG format
+    - `lang`: `tr` or `en` (optional)
+
+- **GET `/version`**  
+  Returns the API version information.
+
+---
+
+## Requirements
+- Python 3.9 or higher
+- macOS (M-series supported), compatible with Windows and Linux
+
+---
+
+## Developer Info
+- **Name:** Ömrüm Ceren GÜLER
+- **Email:** omrumguler35@gmail.com
+- **Internship:** AI & Software Development
+- **University:** Çukurova University
+- **Year:** 2025
+- **Supervisor:** Mehmet Harun GÜLEN
+
+---

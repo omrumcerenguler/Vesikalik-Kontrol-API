@@ -5,3 +5,5 @@ vesikalik_logs.txt
 Kontrol/
 Red/
 Uygun/
+.DS_Store
+__pycache__/

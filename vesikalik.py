@@ -1,5 +1,19 @@
+from starlette.responses import Response
+try:
+    # Pylance sometimes cannot resolve attributes on mediapipe.solutions.
+    # Import an explicit alias and type it as Any to keep type-checkers calm.
+    from mediapipe import solutions as mp_solutions  # type: ignore[attr-defined]
+except Exception:  # pragma: no cover - import is safe at runtime
+    mp_solutions = None  # type: ignore[assignment]
 from fastapi import FastAPI, File, UploadFile, Request, Query
 from fastapi.responses import JSONResponse
+ # Wrapper to satisfy FastAPI's expected exception handler signature
+def rate_limit_handler(request: Request, exc: Exception) -> Response:
+    # slowapi exposes a concrete handler that expects RateLimitExceeded
+    # FastAPI wants a handler typed as (Request, Exception) -> Response
+    # We assert at runtime and delegate to slowapi's default implementation.
+    assert isinstance(exc, RateLimitExceeded)
+    return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
 import cv2
 import numpy as np
 from PIL import Image, ExifTags
@@ -147,7 +161,11 @@ limiter = Limiter(key_func=get_remote_address)
 # FastAPI uygulamasını başlat
 app = FastAPI()
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+# Use the default slowapi rate limit exceeded handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
 # Log dosyası rotasyonu: 10 MB'a ulaşınca, eskiyi vesikalik_logs.txt.1 olarak saklar, yenisine başlar.
 handler = RotatingFileHandler(
@@ -174,7 +192,7 @@ MIN_FILE_SIZE_MB = 0.1
 @app.post("/kontrol")
 async def kontrol(file: UploadFile = File(...)):
     # Sadece dosya adını al, path silinir
-    safe_filename = Path(file.filename).name
+    safe_filename = Path(file.filename if file.filename is not None else "unknown.jpg").name
     return JSONResponse({"status": "ok", "filename": safe_filename, "message": "Fotoğraf alındı!"})
 
 # --- KURAL 1: Dosya adı kontrolleri ---
@@ -252,13 +270,11 @@ def check_image_dimensions(img, lang):
 
 # --- KURAL 7: Yüz tespit fonksiyonu ---
 def detect_face(image_path, lang):
-    import mediapipe as mp
-    mp_face = mp.solutions.face_detection
     img = cv2.imread(image_path)
     if img is None:
         return -1, None, 0
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    with mp_face.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection:
+    with mp_solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection:  # type: ignore[attr-defined]
         result = face_detection.process(img_rgb)
         if result.detections:
             num_faces = len(result.detections)
@@ -307,11 +323,10 @@ def is_blurry(image_path, threshold=250):
 
 # --- KURAL 10: Boydan fotoğraf kontrolü ---
 def is_full_body(image_path, threshold=0.6):
-    import mediapipe as mp
     img = cv2.imread(image_path)
     if img is None:
         return False
-    mp_pose = mp.solutions.pose
+    mp_pose = mp_solutions.pose  # type: ignore[attr-defined]
     with mp_pose.Pose(static_image_mode=True) as pose:
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = pose.process(img_rgb)
@@ -331,13 +346,12 @@ def is_full_body(image_path, threshold=0.6):
         return found >= 2
 # --- KURAL 11: Gözlük kontrolü ---
 def is_sunglasses_present(image_path):
-    import mediapipe as mp
-    mp_face_mesh = mp.solutions.face_mesh
+    face_mesh_module = mp_solutions.face_mesh  # type: ignore[attr-defined]
     img = cv2.imread(image_path)
     if img is None:
         return False
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    with mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1, refine_landmarks=True) as face_mesh:
+    with face_mesh_module.FaceMesh(static_image_mode=True, max_num_faces=1, refine_landmarks=True) as face_mesh:
         result = face_mesh.process(img_rgb)
         if not result.multi_face_landmarks:
             return False
@@ -401,7 +415,7 @@ def correct_orientation_and_check_date(file, lang):
     file.file.seek(0)
     try:
         img = Image.open(file.file)
-        exif = img._getexif()
+        exif = img.getexif()
         photo_date = None
         if exif is not None:
             for tag, value in exif.items():
@@ -456,7 +470,7 @@ async def upload_image(
             })
 
         # Dosya adı oluşturma
-        original_filename = Path(file.filename).name
+        original_filename = Path(file.filename or "unknown.jpg").name
         unique_id = uuid.uuid4().hex[:8]
         filename = f"{unique_id}_{original_filename}"
 
